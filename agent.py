@@ -16,9 +16,9 @@ import os
 load_dotenv()
 
 # Initialize components from the provided functions
-from github import parse_github_url, fetch_user_data, fetch_repo_data, rate_repo_activity
-from contract_code import fetch_contract_source_code
-from trading_data import get_details
+from src.utils.github import parse_github_url, fetch_user_data, fetch_repo_data, rate_repo_activity
+from src.utils.contract_code import fetch_contract_source_code
+from src.utils.trading_data import get_details
 # Initialize search tool
 tavily_search = TavilySearchResults(max_results=3)
 
