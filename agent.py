@@ -11,6 +11,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 import operator
 from dotenv import load_dotenv
 import os
+import re
 
 # Load environment variables
 load_dotenv()
@@ -32,8 +33,47 @@ class AgentState:
     token_data: Dict = None
     current_step: str = "start"
     final_analysis: str = ""
+    input_type: str = None
+    github_url: str = None
+    contract_address: str = None
+    project_name: str = None
+    errors: List[str] = None  # Track errors for reporting
 
-# [Previous helper functions remain the same]
+    def __post_init__(self):
+
+        if self.errors is None:
+
+            self.errors = []
+
+def analyze_user_input(input_text: str, llm) -> Dict:
+    """
+    Analyze user input to determine its type and extract relevant information
+    """
+    # Basic validation patterns
+    github_pattern = r'github\.com/[\w-]+/[\w-]+'
+    eth_address_pattern = r'0x[a-fA-F0-9]{40}'
+    
+    try:
+        # First try to extract GitHub URL and contract address from the text
+        print('inside analyze_user_input')
+        github_match = re.search(github_pattern, input_text)
+        eth_address_match = re.search(eth_address_pattern, input_text)
+        print('inside analyze_user_input var',github_match, eth_address_match)
+        if github_match:
+            print('inside analyze_user_input if', github_match)
+            return {"type": "github_url", "value": github_match.group(), "confidence": "high"}
+        elif eth_address_match:
+            print('inside analyze_user_input elif', eth_address_match)
+            return {"type": "contract_address", "value": eth_address_match.group(), "confidence": "high"}
+        
+        # If no matches, treat as project name
+        print('inside analyze_user_input else', input_text)
+        return {"type": "project_name", "value": input_text.strip(), "confidence": "medium"}
+            
+    except Exception as e:
+        print(f"Error during input analysis: {e}")
+        return {"type": "project_name", "value": input_text.strip(), "confidence": "low"}
+    
 def analyze_github_repo(url: str) -> Dict:
     """
     Analyze a GitHub repository and returns metrics and rating.
@@ -136,39 +176,71 @@ def assess_investment_potential(
         return response.content
     except Exception as e:
         return f"Error generating recommendation: {str(e)}"
-
+    
 def create_research_graph():
     # Initialize LLM
     llm = ChatOpenAI(
         temperature=0,
-        model="gpt-4o",  # Using standard GPT-4
+        model="gpt-4o"
     )
     
     # Create workflow graph
     workflow = StateGraph(AgentState)
     
     # Define nodes
-    def github_research(state):
-        """Find and analyze GitHub repository"""
+    def input_analysis(state: AgentState) -> AgentState:
+        """Analyze user input and determine next steps"""
         if not state.messages:
             return state
-        
+            
         query = state.messages[-1].content
-        search_results = tavily_search.run(f"github repository {query}")
-        if search_results:
-            github_url = search_results[0]["url"]
-            github_data = analyze_github_repo(github_url)
-            state.github_data = github_data
+        analysis = analyze_user_input(query, llm)
+        
+        state.input_type = analysis["type"]
+        
+        if analysis["type"] == "github_url":
+            state.github_url = analysis["value"]
+            state.current_step = "github_research"
+        elif analysis["type"] == "contract_address":
+            state.contract_address = analysis["value"]
             state.current_step = "contract_analysis"
+        else:
+            state.project_name = analysis["value"]
+            state.current_step = "generate_analysis"
+            
+        return state
+    
+    def github_search(state: AgentState) -> AgentState:
+        """Search for GitHub repository if only project name is provided"""
+        if state.github_url:  # Skip if we already have a GitHub URL
+            return state
+            
+        search_results = tavily_search.run(f"github repository {state.project_name}")
+        if search_results:
+            state.github_url = search_results[0]["url"]
+        state.current_step = "generate_analysis"
+        return state
+    
+    def github_research(state):
+        """Analyze GitHub repository"""
+        if not state.github_url:
+            return state
+            
+        github_data = analyze_github_repo(state.github_url)
+        state.github_data = github_data
+        
+        if state.contract_address:
+            state.current_step = "contract_analysis"
+        else:
+            state.current_step = "final_analysis"
         return state
     
     def contract_analysis(state):
         """Analyze smart contract code"""
-        if not state.github_data:
+        if not state.contract_address:
             return state
             
-        contract_addr = state.messages[-1].content
-        contract_data = fetch_contract_source_code(contract_addr)
+        contract_data = fetch_contract_source_code(state.contract_address)
         if contract_data["success"]:
             security_analysis = analyze_blockchain_security(
                 contract_data["data"],
@@ -178,82 +250,117 @@ def create_research_graph():
                 "code": contract_data["data"],
                 "analysis": security_analysis
             }
+            
+        if state.github_data:
             state.current_step = "token_analysis"
+        else:
+            state.current_step = "github_search"
         return state
     
     def token_analysis(state):
         """Analyze token metrics and generate recommendation"""
-        if not state.contract_data:
+        if not state.contract_address:
             return state
             
-        token_addr = state.messages[-1].content
-        token_data = get_details(token_addr)
+        token_data = get_details(state.contract_address)
         state.token_data = token_data
         
-        recommendation = assess_investment_potential(
-            state.github_data,
-            state.contract_data["analysis"],
-            token_data,
-            llm
-        )
+        state.current_step = "final_analysis"
+        return state
+    
+    def generate_analysis(state):
+        """Generate final analysis and recommendation"""
+        if state.token_data and state.github_data and state.contract_data:
+            recommendation = assess_investment_potential(
+                state.github_data,
+                state.contract_data["analysis"],
+                state.token_data,
+                llm
+            )
+            state.final_analysis = recommendation
+        elif state.github_data:
+            state.final_analysis = f"GitHub Analysis Only:\n{state.github_data}"
         
-        state.final_analysis = recommendation
-        state.current_step = "complete"
         return state
     
     # Add nodes to graph
+    workflow.add_node("input_analysis", input_analysis)
+    workflow.add_node("github_search", github_search)
     workflow.add_node("github_research", github_research)
     workflow.add_node("contract_analysis", contract_analysis)
     workflow.add_node("token_analysis", token_analysis)
+    workflow.add_node("generate_analysis", generate_analysis)
     
-    # Add entry point from START to github_research
-    workflow.set_entry_point("github_research")
+    # Set entry point
+    workflow.set_entry_point("input_analysis")
     
-    # Define edges between nodes
+    # Define conditional edges
+    workflow.add_conditional_edges(
+        "input_analysis",
+        lambda x: {
+            "github_url": "github_research",
+            "contract_address": "contract_analysis",
+            "project_name": "github_search"
+        }[x.input_type]
+    )
+    
+    workflow.add_conditional_edges(
+        "github_search",
+        lambda x: "github_research"
+    )
+    
     workflow.add_conditional_edges(
         "github_research",
-        lambda x: "token_analysis" if x.contract_data else "contract_analysis"
+        lambda x: "contract_analysis" if x.contract_address else "generate_analysis"
     )
     
     workflow.add_conditional_edges(
         "contract_analysis",
-        lambda x: "complete" if x.token_data else "token_analysis"
+        lambda x: "token_analysis" if x.github_data else "github_search"
     )
     
-    # Set end condition
-    workflow.set_finish_point("token_analysis")
+    workflow.add_conditional_edges(
+        "token_analysis",
+        lambda x: "generate_analysis"
+    )
     
-    return workflow.compile()
+    # Set final_analysis as the end point
+    workflow.set_finish_point("generate_analysis")
+    
+    graph =  workflow.compile()
+    # print(graph.get_graph().draw_mermaid())
+    return graph
 
 def main():
     # Create research workflow
     research_graph = create_research_graph()
     
-    # Get project name or token address from user
-    query = input("Enter project name or token address to analyze: ")
+    # Get user input
+    query = input("Enter project name, contract address, or GitHub URL to analyze: ")
     
     # Initialize state
     initial_state = AgentState(
         messages=[HumanMessage(content=query)],
-        github_data=None,
-        contract_data=None,
-        token_data=None,
-        current_step="start",
-        final_analysis=""
+        current_step="start"
     )
     
     # Run analysis
-    final_state = research_graph.invoke(initial_state)
+    final_state_dict = research_graph.invoke(initial_state)
+    # Convert the AddableValuesDict to AgentState
+    final_state = AgentState(**final_state_dict)
     
     # Print results
     print("\nAnalysis Results:")
-    if isinstance(final_state, dict) and 'final_analysis' in final_state:
-        print(final_state['final_analysis'])
-    elif hasattr(final_state, 'final_analysis'):
+    if final_state.final_analysis:
         print(final_state.final_analysis)
     else:
-        print("Analysis completed but no final results available.")
-        print("State:", final_state)
+        print("Analysis completed. Available data:")
+        if final_state.github_data:
+            print("\nGitHub Analysis:", final_state.github_data)
+        if final_state.contract_data:
+            print("\nContract Analysis:", final_state.contract_data["analysis"])
+        if final_state.token_data:
+            print("\nToken Analysis:", final_state.token_data)
 
 if __name__ == "__main__":
     main()
