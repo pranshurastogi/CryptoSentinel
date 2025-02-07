@@ -19,113 +19,86 @@ load_dotenv()
 from src.utils.github import parse_github_url, fetch_user_data, fetch_repo_data, rate_repo_activity
 from src.utils.contract_code import fetch_contract_source_code
 from src.utils.trading_data import get_details
+
 # Initialize search tool
 tavily_search = TavilySearchResults(max_results=3)
 
 @dataclass
 class AgentState:
+    """State object for the research workflow"""
     messages: List[BaseMessage]
     github_data: Dict = None
     contract_data: Dict = None
     token_data: Dict = None
     current_step: str = "start"
-    
-def create_agent(llm):
-    """Create an agent with tools"""
-    tools = [
-        Tool(
-            name="search_github",
-            func=lambda q: tavily_search.run(f"github repository {q}"),
-            description="Search for GitHub repositories related to a blockchain project"
-        ),
-        Tool(
-            name="analyze_github",
-            func=lambda url: analyze_github_repo(url),
-            description="Analyze a GitHub repository's metrics and activity"
-        ),
-        Tool(
-            name="analyze_contract",
-            func=lambda addr: fetch_contract_source_code(addr),
-            description="Analyze smart contract source code for security issues"
-        ),
-        Tool(
-            name="get_token_metrics",
-            func=lambda addr: get_details(addr, "base"),
-            description="Get detailed token metrics from CoinGecko"
-        )
-    ]
-    
-    prompt = PromptTemplate.from_template("""
-    You are a blockchain project research assistant. Use the available tools to analyze projects.
-    
-    Tools available:
-    search_github: Search for GitHub repositories
-    analyze_github: Get repository metrics
-    analyze_contract: Analyze smart contract code
-    get_token_metrics: Get token market data
-    
-    Goal: {input}
-    
-    Take actions one step at a time. Think about which tool to use when.
-    
-    {agent_scratchpad}
-    """)
-    
-    agent = create_react_agent(llm, tools, prompt)
-    return AgentExecutor(agent=agent, tools=tools, verbose=True)
+    final_analysis: str = ""
 
+# [Previous helper functions remain the same]
 def analyze_github_repo(url: str) -> Dict:
-    """Analyze a GitHub repository and return metrics"""
+    """
+    Analyze a GitHub repository and returns metrics and rating.
+    Args:
+        url (str): GitHub repository URL
+    Returns:
+        Dict: Repository metrics and analysis
+    """
     try:
+        # Parse the GitHub URL
         parsed = parse_github_url(url)
-        if parsed["type"] == "repo":
-            repo_data = fetch_repo_data(parsed["username"], parsed["repo"])
-            rating = rate_repo_activity(repo_data)
-            return {**repo_data, "rating": rating}
-        return {"error": "Not a valid repository URL"}
+        if parsed["type"] != "repo":
+            return {"error": "Not a valid repository URL"}
+            
+        # Get repository data
+        repo_data = fetch_repo_data(parsed["username"], parsed["repo"])
+        
+        # Get user data for additional context
+        user_data = fetch_user_data(parsed["username"])
+        
+        # Get repository rating
+        repo_rating = rate_repo_activity(repo_data)
+        
+        # Combine all data
+        analysis = {
+            "repository": {
+                "name": f"{parsed['username']}/{parsed['repo']}",
+                "stars": repo_data.get("stars", 0),
+                "forks": repo_data.get("forks", 0),
+                "watchers": repo_data.get("watchers", 0),
+                "open_issues": repo_data.get("open_issues", 0)
+            },
+            "developer": {
+                "username": parsed["username"],
+                "followers": user_data.get("followers", 0),
+                "public_repos": user_data.get("public_repos", 0),
+                "total_stars": user_data.get("total_stars", 0),
+                "total_forks": user_data.get("total_forks", 0)
+            },
+            "rating": repo_rating,
+            "url": url
+        }
+        
+        return analysis
+        
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"Failed to analyze repository: {str(e)}"}
 
 def analyze_blockchain_security(contract_code: str, llm) -> str:
-    """Analyze smart contract for security issues with chunking support"""
-    # Split contract into manageable chunks
-    chunks = chunk_contract_code(contract_code)
-    analyses = []
+    """Analyze smart contract for security issues"""
+    prompt = """Analyze this smart contract code for:
+    1. Security vulnerabilities (reentrancy, overflow, etc.)
+    2. Access control and ownership patterns
+    3. Potential centralization risks
+    4. Common best practices compliance
     
-    # Analyze each chunk
-    for i, chunk in enumerate(chunks):
-        chunk_prompt = f"""Analyze this portion ({i+1}/{len(chunks)}) of the smart contract code for potential security issues, 
-        focusing on:
-        1. Reentrancy vulnerabilities
-        2. Access control issues
-        3. Centralization risks
-        4. Potential rugpull vectors
-        
-        Contract code section:
-        {chunk}
-        
-        Provide a focused analysis of this section:"""
-        
-        try:
-            chunk_analysis = llm.predict(chunk_prompt)
-            analyses.append(chunk_analysis)
-        except Exception as e:
-            analyses.append(f"Error analyzing chunk {i+1}: {str(e)}")
-    
-    # Combine and summarize analyses
-    combined_analyses = "\n\n".join(analyses)
-    
-    summary_prompt = f"""Based on the detailed analyses of different sections of the contract, provide a comprehensive summary of security concerns:
-
-    Individual analyses:
-    {combined_analyses}
-    
-    Provide a consolidated security assessment:"""
+    Provide a clear summary of findings:
+    """
     
     try:
-        return llm.predict(summary_prompt)
+        message = HumanMessage(content=f"{prompt}\n\nContract:\n{contract_code}")
+        response = llm.invoke([message])
+        return response.content
     except Exception as e:
-        return f"Error generating final summary: {str(e)}\n\nIndividual analyses:\n{combined_analyses}"
+        return f"Error analyzing contract: {str(e)}"
 
 def assess_investment_potential(
     github_data: Dict,
@@ -157,20 +130,19 @@ def assess_investment_potential(
     
     Provide a detailed recommendation:"""
     
-    return llm.predict(prompt)
-def chunk_contract_code(contract_code: str, chunk_size: int = 6000) -> List[str]:
-    """Split contract code into manageable chunks"""
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size,
-        chunk_overlap=200,
-        length_function=len,
-        separators=["\n\n", "\n", " ", ""]
-    )
-    return text_splitter.split_text(contract_code)
+    try:
+        message = HumanMessage(content=prompt)
+        response = llm.invoke([message])
+        return response.content
+    except Exception as e:
+        return f"Error generating recommendation: {str(e)}"
 
 def create_research_graph():
     # Initialize LLM
-    llm = ChatOpenAI(temperature=0,model="gpt-4o")
+    llm = ChatOpenAI(
+        temperature=0,
+        model="gpt-4o",  # Using standard GPT-4
+    )
     
     # Create workflow graph
     workflow = StateGraph(AgentState)
@@ -225,7 +197,7 @@ def create_research_graph():
             llm
         )
         
-        state.messages.append(AIMessage(content=recommendation))
+        state.final_analysis = recommendation
         state.current_step = "complete"
         return state
     
@@ -234,12 +206,22 @@ def create_research_graph():
     workflow.add_node("contract_analysis", contract_analysis)
     workflow.add_node("token_analysis", token_analysis)
     
-    # Define edges
-    workflow.add_edge("github_research", "contract_analysis")
-    workflow.add_edge("contract_analysis", "token_analysis")
-    
-    # Set entry point
+    # Add entry point from START to github_research
     workflow.set_entry_point("github_research")
+    
+    # Define edges between nodes
+    workflow.add_conditional_edges(
+        "github_research",
+        lambda x: "token_analysis" if x.contract_data else "contract_analysis"
+    )
+    
+    workflow.add_conditional_edges(
+        "contract_analysis",
+        lambda x: "complete" if x.token_data else "token_analysis"
+    )
+    
+    # Set end condition
+    workflow.set_finish_point("token_analysis")
     
     return workflow.compile()
 
@@ -251,16 +233,27 @@ def main():
     query = input("Enter project name or token address to analyze: ")
     
     # Initialize state
-    state = AgentState(
-        messages=[HumanMessage(content=query)]
+    initial_state = AgentState(
+        messages=[HumanMessage(content=query)],
+        github_data=None,
+        contract_data=None,
+        token_data=None,
+        current_step="start",
+        final_analysis=""
     )
     
     # Run analysis
-    final_state = research_graph.invoke(state)
+    final_state = research_graph.invoke(initial_state)
     
     # Print results
     print("\nAnalysis Results:")
-    print(final_state.messages[-1].content)
+    if isinstance(final_state, dict) and 'final_analysis' in final_state:
+        print(final_state['final_analysis'])
+    elif hasattr(final_state, 'final_analysis'):
+        print(final_state.final_analysis)
+    else:
+        print("Analysis completed but no final results available.")
+        print("State:", final_state)
 
 if __name__ == "__main__":
     main()
