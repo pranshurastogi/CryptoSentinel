@@ -191,8 +191,8 @@ agent = initialize_agent(
 # ====================
 # Main Execution Block
 # ====================
-if __name__ == "__main__":
-    twitter_url = input("Enter a Twitter URL: ").strip()
-    result = agent.run(twitter_url)
-    print("\nFinal Result:")
-    print(result)
+# if __name__ == "__main__":
+#     twitter_url = input("Enter a Twitter URL: ").strip()
+#     result = agent.run(twitter_url)
+#     print("\nFinal Result:")
+#     print(result)
