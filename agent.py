@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Dict, List, Tuple, Any
 from dataclasses import dataclass, field
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
@@ -36,7 +37,7 @@ class AgentState:
     contract_data: Dict = None
     token_data: Dict = None
     current_step: str = "start"
-    final_analysis: str = ""
+    final_analysis: Dict = None
     input_type: str = None
     github_url: str = None
     contract_address: str = None
@@ -235,42 +236,77 @@ def analyze_blockchain_security(contract_code: str, llm) -> str:
     except Exception as e:
         return f"Error analyzing contract: {str(e)}"
 
+@dataclass
+class AnalysisMetrics:
+    rating: float  # 0-10 scale
+    comment: str
+    error: str | None = None
+
+@dataclass
+class InvestmentAnalysis:
+    code_activity: AnalysisMetrics
+    smart_contract_risk: AnalysisMetrics
+    token_performance: AnalysisMetrics
+    social_sentiment: AnalysisMetrics
+    risk_reward_ratio: float  # 0-5 scale
+    confidence_score: float   # 0-100%
+    final_recommendation: str
+    timestamp: str = datetime.now().isoformat()
+
 def assess_investment_potential(
     github_data: Dict,
     contract_analysis: str,
     token_metrics: Dict,
     llm
-) -> str:
-    """Generate investment recommendation based on all collected data"""
-    prompt = f"""Based on the following data, provide an investment recommendation:
-
-    GitHub Analysis:
-    {github_data}
-    
-    Security Analysis:
-    {contract_analysis}
-    
-    Token Metrics:
-    - Current Price: ${token_metrics.get('current_price_usd')}
-    - Market Cap: ${token_metrics.get('market_cap_usd')}
-    - Price Change 24h: {token_metrics.get('price_change_percentage_24h')}%
-    - ATH: ${token_metrics.get('ath_usd')}
-    - ATH Change: {token_metrics.get('ath_change_percentage_usd')}%
-    
-    Consider:
-    1. Project development activity and community
-    2. Security risks and centralization
-    3. Market timing and price action
-    4. Overall risk/reward ratio
-    
-    Provide a detailed recommendation:"""
+) -> Dict:
+    """Generate structured investment recommendation based on all collected data"""
     
     try:
-        message = HumanMessage(content=prompt)
-        response = llm.invoke([message])
-        return response.content
+        response = llm.with_structured_output(InvestmentAnalysis).invoke(
+            f"""Analyze the following cryptocurrency investment data and provide a detailed assessment.
+            
+            GitHub Analysis Data:
+            {github_data}
+            
+            Smart Contract Security Analysis:
+            {contract_analysis}
+            
+            Token and socialmedia Metrics:
+            {token_metrics}
+
+            Instructions:
+            1. Analyze each aspect thoroughly
+            2. Provide ratings on a 0-10 scale (0 for missing/invalid data)
+            3. Include brief but specific comments
+            4. Note any data issues or anomalies as errors
+            5. Calculate risk/reward ratio (0-5) and confidence score (0-100%)
+            6. Provide a final investment recommendation
+            7. *If Data is missing or invalid data the error should be "Not enough data"*
+            8. Social sentiment should be based on twitter numbers and price movement in recent times
+
+            If any data is missing or invalid in a section, set its rating to 0 and include an error message.
+            Keep comments concise but informative (30-50 words).
+            Base the final recommendation on the weighted average of all metrics.
+            """
+        )
+        
+        return response
+        
     except Exception as e:
-        return f"Error generating recommendation: {str(e)}"
+        print(f"Error generating recommendation: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "error": f"Error generating recommendation: {str(e)}",
+            "code_activity": {"rating": 0, "comment": "", "error": "Analysis failed"},
+            "smart_contract_risk": {"rating": 0, "comment": "", "error": "Analysis failed"},
+            "token_performance": {"rating": 0, "comment": "", "error": "Analysis failed"},
+            "social_sentiment": {"rating": 0, "comment": "", "error": "Analysis failed"},
+            "risk_reward_ratio": 0,
+            "confidence_score": 0,
+            "final_recommendation": "Analysis failed due to error",
+            "timestamp": datetime.now().isoformat()
+        }
     
 def handle_followup_question(state: AgentState, question: str, llm) -> str:
     """Handle follow-up questions using summarized conversation history"""
@@ -355,7 +391,8 @@ class ResearchBot:
         final_state_dict = self.research_graph.invoke(self.state)
         self.state = AgentState(**final_state_dict)
         
-        summary = self._create_summary(self.state)
+        summary = self.state.final_analysis
+        # summary = self._create_summary(self.state)
         self.state.add_to_history("user", query)
         self.state.add_to_history("assistant", summary)
         
@@ -490,7 +527,7 @@ def create_research_graph():
             
             # Add trading prompt
             trading_prompt = "\n\nWould you like me to buy this token for you? (yes/no): "
-            state.final_analysis += trading_prompt
+            # state.final_analysis += trading_prompt
             state.current_step = "await_trading_decision"
             
         elif state.github_data:
@@ -603,5 +640,9 @@ def main():
             print("\nResponse:")
             print(response)
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     try:
+#         main()
+#     except Exception as e:
+#         import traceback
+#         traceback.print_exc()

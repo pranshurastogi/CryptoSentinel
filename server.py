@@ -41,7 +41,7 @@ class FollowupRequest(BaseModel):
 
 # Response models
 class AnalysisResponse(BaseModel):
-    result: str
+    result: Dict
     has_trading_prompt: bool = False
     error: Optional[str] = None
 
@@ -61,10 +61,15 @@ app.add_middleware(
 async def analyze_project(request: QueryRequest):
     try:
         bot = bot_manager.get_or_create_bot(request.session_id)
-        result = bot.process_initial_query(request.query)
-        
+        try:
+            result = bot.process_initial_query(request.query)
+        except Exception as e:
+            # Log the error for debugging
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=str(e))
         # Check if result contains trading prompt
-        has_trading_prompt = "Would you like me to buy this token for you?" in result
+        has_trading_prompt = True
         
         return AnalysisResponse(
             result=result,
