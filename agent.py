@@ -1,5 +1,5 @@
 from typing import Dict, List, Tuple, Any
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 from langgraph.graph import Graph, StateGraph
 from langgraph.prebuilt import ToolExecutor
@@ -38,12 +38,20 @@ class AgentState:
     contract_address: str = None
     project_name: str = None
     errors: List[str] = None  # Track errors for reporting
+    conversation_history: List[Dict] = field(default_factory=list)
+    context: Dict = field(default_factory=dict)
 
     def __post_init__(self):
 
         if self.errors is None:
 
             self.errors = []
+
+    def add_to_history(self, role: str, content: str):
+        self.conversation_history.append({
+            "role": role,
+            "content": content
+        })
 
 def analyze_user_input(input_text: str, llm) -> Dict:
     """
@@ -177,6 +185,91 @@ def assess_investment_potential(
     except Exception as e:
         return f"Error generating recommendation: {str(e)}"
     
+def handle_followup_question(state: AgentState, question: str, llm) -> str:
+    """Handle follow-up questions using summarized conversation history"""
+    
+    # Create a concise context from conversation history
+    context = "\n".join([
+        f"{entry['role']}: {entry['content']}"
+        for entry in state.conversation_history[-2:]  # Only use last interaction
+    ])
+    
+    prompt = f"""Based on this previous analysis:
+
+{context}
+
+Please answer this follow-up question: {question}
+
+Provide a specific answer based on the available information."""
+
+    try:
+        message = HumanMessage(content=prompt)
+        response = llm.invoke([message])
+        return response.content
+    except Exception as e:
+        return f"Error processing follow-up question: {str(e)}"
+
+class ResearchBot:
+    def __init__(self):
+        self.llm = ChatOpenAI(temperature=0, model="gpt-4")
+        self.state = None
+        self.research_graph = create_research_graph()
+
+    def process_initial_query(self, query: str) -> str:
+        """Process the initial research query"""
+        self.state = AgentState(
+            messages=[HumanMessage(content=query)],
+            current_step="start"
+        )
+        
+        # Run analysis
+        final_state_dict = self.research_graph.invoke(self.state)
+        self.state = AgentState(**final_state_dict)
+        
+        # Store only the final analysis summary
+        summary = self._create_summary(self.state)
+        self.state.add_to_history("user", query)
+        self.state.add_to_history("assistant", summary)
+        
+        return summary
+
+    def _create_summary(self, state: AgentState) -> str:
+        """Create a concise summary of the analysis"""
+        summary_parts = []
+        
+        if state.final_analysis:
+            summary_parts.append(state.final_analysis)
+        else:
+            if state.github_data:
+                summary_parts.append("GitHub Analysis Summary:")
+                summary_parts.append(f"Repository: {state.github_data.get('repository', {}).get('name', 'N/A')}")
+                summary_parts.append(f"Rating: {state.github_data.get('rating', 'N/A')}")
+                
+            if state.contract_data:
+                summary_parts.append("Contract Analysis Summary:")
+                summary_parts.append(state.contract_data.get('analysis', 'N/A'))
+                
+            if state.token_data:
+                summary_parts.append("Token Metrics Summary:")
+                metrics = state.token_data
+                summary_parts.append(f"Price: ${metrics.get('current_price_usd', 'N/A')}")
+                summary_parts.append(f"Market Cap: ${metrics.get('market_cap_usd', 'N/A')}")
+        
+        return "\n".join(summary_parts)
+
+    def process_followup(self, question: str) -> str:
+        """Process follow-up questions"""
+        if not self.state:
+            return "Please provide an initial query first."
+            
+        response = handle_followup_question(self.state, question, self.llm)
+        
+        # Store only the question and response
+        self.state.add_to_history("user", question)
+        self.state.add_to_history("assistant", response)
+        
+        return response
+
 def create_research_graph():
     # Initialize LLM
     llm = ChatOpenAI(
@@ -332,35 +425,31 @@ def create_research_graph():
     return graph
 
 def main():
-    # Create research workflow
-    research_graph = create_research_graph()
+    bot = ResearchBot()
     
-    # Get user input
-    query = input("Enter project name, contract address, or GitHub URL to analyze: ")
+    print("Welcome to the Research Bot! Enter 'quit' to exit.")
     
-    # Initialize state
-    initial_state = AgentState(
-        messages=[HumanMessage(content=query)],
-        current_step="start"
-    )
-    
-    # Run analysis
-    final_state_dict = research_graph.invoke(initial_state)
-    # Convert the AddableValuesDict to AgentState
-    final_state = AgentState(**final_state_dict)
-    
-    # Print results
-    print("\nAnalysis Results:")
-    if final_state.final_analysis:
-        print(final_state.final_analysis)
-    else:
-        print("Analysis completed. Available data:")
-        if final_state.github_data:
-            print("\nGitHub Analysis:", final_state.github_data)
-        if final_state.contract_data:
-            print("\nContract Analysis:", final_state.contract_data["analysis"])
-        if final_state.token_data:
-            print("\nToken Analysis:", final_state.token_data)
+    while True:
+        if not bot.state:
+            query = input("\nEnter project name, contract address, or GitHub URL to analyze: ")
+            if query.lower() == 'quit':
+                break
+                
+            result = bot.process_initial_query(query)
+            print("\nInitial Analysis:")
+            print(result)
+            
+        else:
+            follow_up = input("\nAsk a follow-up question (or 'new' for new analysis, 'quit' to exit): ")
+            if follow_up.lower() == 'quit':
+                break
+            elif follow_up.lower() == 'new':
+                bot.state = None
+                continue
+                
+            response = bot.process_followup(follow_up)
+            print("\nResponse:")
+            print(response)
 
 if __name__ == "__main__":
     main()
