@@ -161,13 +161,13 @@ body {
   margin: 10px 0;
 }
 
-.progress-bar {
+/* .progress-bar {
   height: 10px;
   background: linear-gradient(90deg, #4caf50, #81c784);
   border-radius: 5px;
   flex: 1;
   margin-right: 10px;
-}
+} */
 
 .progress-bar.risk-reward {
   background: linear-gradient(90deg, #ff9800, #ffb74d);
@@ -255,8 +255,48 @@ body {
   color: #fff;
 }
 
-/* Loader Styles */
-/* Loader Styles */
+/* --- Global and Layout Styles --- */
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #0d0d0d;
+  font-family: 'Roboto', sans-serif;
+  color: #e0e0e0;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+}
+
+.app-header, .app-footer {
+  text-align: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.app-header h1 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 2.5rem;
+  margin: 0;
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+/* --- Loader Styles --- */
 .loader-container {
   display: flex;
   flex-direction: column;
@@ -277,13 +317,155 @@ body {
 }
 
 @keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  to { transform: rotate(360deg); }
 }
 
 .loader-message {
   font-size: 1.2rem;
-  color: #e0e0e0;
   text-align: center;
+}
+
+/* --- Decision Loader Styles --- */
+.decision-loader {
+  text-align: center;
+  font-size: 1.2rem;
+  color: #e0e0e0;
+}
+
+.decision-loader p {
+  display: inline-block;
+}
+
+.decision-loader .dot {
+  opacity: 0;
+  animation: blink 1.4s infinite;
+  margin-left: 2px;
+}
+
+@keyframes blink {
+  0%, 20% { opacity: 0; }
+  50% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* --- Analysis Summary and Metrics Styles --- */
+.analysis-summary {
+  background: rgba(0, 0, 0, 0.8);
+  padding: 30px;
+  border-radius: 10px;
+  max-width: 900px;
+  margin: 20px auto;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+}
+
+.analysis-summary h2 {
+  text-align: center;
+  margin-bottom: 20px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 2rem;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.metric-card {
+  background: #1e1e1e;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  box-sizing: border-box;
+}
+
+
+.metric-card h3 {
+  margin-top: 0;
+  font-size: 1.4rem;
+  color: #fff;
+}
+
+.rating {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 10px;
+  /* Ensure the rating area doesn’t push outside the card */
+  box-sizing: border-box;
+}
+
+
+.progress-bar {
+  height: 10px;
+  border-radius: 5px;
+  flex: 1;
+  margin-right: 10px;
+}
+/* Progress Bar Container: always visible as the empty state */
+.progress-bar-container {
+  flex: 1;              /* Allow this container to take all available space */
+  height: 10px;
+  background-color: #555;  /* Default empty state color */
+  border-radius: 5px;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Fill element: the colored portion that represents the rating */
+.progress-bar-fill {
+  height: 100%;
+  transition: width 0.5s ease-in-out;
+  /* The width is controlled via inline style; no flex property here */
+}
+
+/* The text showing the rating score */
+.rating-text {
+  min-width: 50px;
+  text-align: right;
+  color: #fff;
+  font-size: 0.9rem;
+}
+
+.rating span {
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.metric-card p {
+  margin: 5px 0;
+  font-size: 0.95rem;
+  color: #ccc;
+}
+
+.error {
+  color: #f44336;
+  font-weight: bold;
+  font-size: 0.9rem;
+}
+
+.final-recommendation {
+  background: #1a1a1a;
+  padding: 20px;
+  border-radius: 8px;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.final-recommendation h3 {
+  margin: 0 0 10px;
+  color: #fff;
+}
+
+.final-recommendation .timestamp {
+  font-size: 0.9rem;
+  color: #aaa;
+}
+
+.buy-prompt {
+  text-align: center;
+  font-size: 1.2rem;
+  margin-top: 20px;
+  color: #e0e0e0;
 }
