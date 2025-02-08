@@ -13,6 +13,10 @@ from dotenv import load_dotenv
 import os
 import re
 
+# Added import for CDP Agentkit
+from cdp_langchain.agent_toolkits import CdpToolkit
+from cdp_langchain.utils import CdpAgentkitWrapper
+
 # Load environment variables
 load_dotenv()
 
@@ -37,9 +41,11 @@ class AgentState:
     github_url: str = None
     contract_address: str = None
     project_name: str = None
-    errors: List[str] = None  # Track errors for reporting
+    errors: List[str] = None
     conversation_history: List[Dict] = field(default_factory=list)
     context: Dict = field(default_factory=dict)
+    trading_decision: str = None  # New field for trading decision
+    trading_result: str = None    # New field for trading result
 
     def __post_init__(self):
 
@@ -52,6 +58,87 @@ class AgentState:
             "role": role,
             "content": content
         })
+
+def initialize_trading_agent():
+    """Initialize the CDP trading agent"""
+    llm = ChatOpenAI(model="gpt-4")
+    
+    # Initialize CDP Agentkit
+    agentkit = CdpAgentkitWrapper()
+    cdp_toolkit = CdpToolkit.from_cdp_agentkit_wrapper(agentkit)
+    tools = cdp_toolkit.get_tools()
+    
+    # Create system prompt for the trading agent with all required variables
+    prompt_template = """You are a trading agent that can execute token purchases using CDP AgentKit. 
+    When asked to buy a token, you should:
+    1. Check if you have sufficient funds using get_wallet_details
+    2. If on base-sepolia, request funds from faucet if needed
+    3. Execute the purchase using swap_tokens
+    4. Confirm the transaction completed successfully
+    Be concise in your responses and focus on execution.
+
+    Tools available:
+    {tools}
+
+    Use the following format:
+
+    Question: the input question you must answer
+    Thought: you should always think about what to do
+    Action: the action to take, should be one of [{tool_names}]
+    Action Input: the input to the action
+    Observation: the result of the action
+    ... (this Thought/Action/Action Input/Observation can repeat N times)
+    Thought: I now know what to do
+    Final Answer: the final answer to the original input question
+
+    Begin!
+
+    Question: {input}
+    {agent_scratchpad}"""
+
+    prompt = PromptTemplate(
+        template=prompt_template,
+        input_variables=["input", "tools", "tool_names", "agent_scratchpad"]
+    )
+    
+    # Create trading agent with correct parameters
+    agent = create_react_agent(
+        llm=llm,
+        tools=tools,
+        prompt=prompt
+    )
+    
+    # Create agent executor
+    agent_executor = AgentExecutor(
+        agent=agent,
+        tools=tools,
+        verbose=True
+    )
+    
+    return agent_executor
+
+
+def execute_trade(state: AgentState, agent_executor) -> str:
+    """Execute token purchase using CDP agent"""
+    if not state.contract_address:
+        return "Error: No contract address provided for trading"
+        
+    try:
+        # Construct trading instruction
+        trading_instruction = (
+            f"Please buy the token at address {state.contract_address}. "
+            "First check wallet details, then execute the purchase using appropriate tools."
+        )
+        
+        # Execute trade
+        response = agent_executor.invoke(
+            {"input": trading_instruction}
+        )
+        
+        return response["output"]
+    except Exception as e:
+        return f"Trading error: {str(e)}"
+    
 
 def analyze_user_input(input_text: str, llm) -> Dict:
     """
@@ -215,6 +302,49 @@ class ResearchBot:
         self.state = None
         self.research_graph = create_research_graph()
 
+    def _create_summary(self, state: AgentState) -> str:
+        """Create a summary of the research findings"""
+        summary_parts = []
+        
+        # Add GitHub analysis if available
+        if state.github_data:
+            if isinstance(state.github_data, dict) and "error" not in state.github_data:
+                repo_info = state.github_data.get("repository", {})
+                summary_parts.append(
+                    f"GitHub Analysis:\n"
+                    f"Repository: {repo_info.get('name')}\n"
+                    f"Stars: {repo_info.get('stars')}\n"
+                    f"Forks: {repo_info.get('forks')}\n"
+                    f"Rating: {state.github_data.get('rating', 'N/A')}"
+                )
+            else:
+                summary_parts.append(f"GitHub Analysis Error: {state.github_data.get('error', 'Unknown error')}")
+
+        # Add contract analysis if available
+        if state.contract_data:
+            summary_parts.append(
+                f"\nContract Analysis:\n{state.contract_data.get('analysis', 'No analysis available')}"
+            )
+
+        # Add token data if available
+        if state.token_data:
+            summary_parts.append(
+                f"\nToken Metrics:\n"
+                f"Price: ${state.token_data.get('current_price_usd', 'N/A')}\n"
+                f"Market Cap: ${state.token_data.get('market_cap_usd', 'N/A')}\n"
+                f"24h Change: {state.token_data.get('price_change_percentage_24h', 'N/A')}%"
+            )
+
+        # Add final analysis if available
+        if state.final_analysis:
+            summary_parts.append(f"\n{state.final_analysis}")
+        
+        # If no data is available, provide a status message
+        if not summary_parts:
+            return "Analysis in progress... No data available yet."
+            
+        return "\n".join(summary_parts)
+
     def process_initial_query(self, query: str) -> str:
         """Process the initial research query"""
         self.state = AgentState(
@@ -222,40 +352,27 @@ class ResearchBot:
             current_step="start"
         )
         
-        # Run analysis
         final_state_dict = self.research_graph.invoke(self.state)
         self.state = AgentState(**final_state_dict)
         
-        # Store only the final analysis summary
         summary = self._create_summary(self.state)
         self.state.add_to_history("user", query)
         self.state.add_to_history("assistant", summary)
         
         return summary
 
-    def _create_summary(self, state: AgentState) -> str:
-        """Create a concise summary of the analysis"""
-        summary_parts = []
+    def process_trading_decision(self, decision: str) -> str:
+        """Process user's trading decision"""
+        if not self.state:
+            return "Please provide an initial query first."
+            
+        self.state.trading_decision = decision
+        final_state_dict = self.research_graph.invoke(self.state)
+        self.state = AgentState(**final_state_dict)
         
-        if state.final_analysis:
-            summary_parts.append(state.final_analysis)
-        else:
-            if state.github_data:
-                summary_parts.append("GitHub Analysis Summary:")
-                summary_parts.append(f"Repository: {state.github_data.get('repository', {}).get('name', 'N/A')}")
-                summary_parts.append(f"Rating: {state.github_data.get('rating', 'N/A')}")
-                
-            if state.contract_data:
-                summary_parts.append("Contract Analysis Summary:")
-                summary_parts.append(state.contract_data.get('analysis', 'N/A'))
-                
-            if state.token_data:
-                summary_parts.append("Token Metrics Summary:")
-                metrics = state.token_data
-                summary_parts.append(f"Price: ${metrics.get('current_price_usd', 'N/A')}")
-                summary_parts.append(f"Market Cap: ${metrics.get('market_cap_usd', 'N/A')}")
-        
-        return "\n".join(summary_parts)
+        if self.state.trading_result:
+            return self.state.trading_result
+        return "Trading decision processed."
 
     def process_followup(self, question: str) -> str:
         """Process follow-up questions"""
@@ -263,8 +380,6 @@ class ResearchBot:
             return "Please provide an initial query first."
             
         response = handle_followup_question(self.state, question, self.llm)
-        
-        # Store only the question and response
         self.state.add_to_history("user", question)
         self.state.add_to_history("assistant", response)
         
@@ -276,6 +391,7 @@ def create_research_graph():
         temperature=0,
         model="gpt-4o"
     )
+    trading_agent = initialize_trading_agent()
     
     # Create workflow graph
     workflow = StateGraph(AgentState)
@@ -362,7 +478,7 @@ def create_research_graph():
         return state
     
     def generate_analysis(state):
-        """Generate final analysis and recommendation"""
+        """Generate final analysis and handle trading prompt"""
         if state.token_data and state.github_data and state.contract_data:
             recommendation = assess_investment_potential(
                 state.github_data,
@@ -371,9 +487,27 @@ def create_research_graph():
                 llm
             )
             state.final_analysis = recommendation
+            
+            # Add trading prompt
+            trading_prompt = "\n\nWould you like me to buy this token for you? (yes/no): "
+            state.final_analysis += trading_prompt
+            state.current_step = "await_trading_decision"
+            
         elif state.github_data:
             state.final_analysis = f"GitHub Analysis Only:\n{state.github_data}"
+            
+        return state
         
+    def handle_trading_decision(state):
+        """Process user's trading decision"""
+        if state.trading_decision and state.trading_decision.lower() == "yes":
+            trading_result = execute_trade(state, trading_agent)
+            state.trading_result = trading_result
+            
+        return state
+
+    def end_node(state):
+        """Final node to properly end the workflow"""
         return state
     
     # Add nodes to graph
@@ -383,11 +517,13 @@ def create_research_graph():
     workflow.add_node("contract_analysis", contract_analysis)
     workflow.add_node("token_analysis", token_analysis)
     workflow.add_node("generate_analysis", generate_analysis)
+    workflow.add_node("handle_trading_decision", handle_trading_decision)
+    workflow.add_node("end", end_node)  # Add the end node explicitly
     
     # Set entry point
     workflow.set_entry_point("input_analysis")
     
-    # Define conditional edges
+    # Define edges with proper conditional routing
     workflow.add_conditional_edges(
         "input_analysis",
         lambda x: {
@@ -417,12 +553,20 @@ def create_research_graph():
         lambda x: "generate_analysis"
     )
     
-    # Set final_analysis as the end point
-    workflow.set_finish_point("generate_analysis")
+    workflow.add_conditional_edges(
+        "generate_analysis",
+        lambda x: "handle_trading_decision" if x.current_step == "await_trading_decision" else "end"
+    )
     
-    graph =  workflow.compile()
-    # print(graph.get_graph().draw_mermaid())
-    return graph
+    workflow.add_conditional_edges(
+        "handle_trading_decision",
+        lambda x: "end"
+    )
+    
+    # Set proper end point
+    workflow.set_finish_point("end")
+    
+    return workflow.compile()
 
 def main():
     bot = ResearchBot()
@@ -436,9 +580,17 @@ def main():
                 break
                 
             result = bot.process_initial_query(query)
-            print("\nInitial Analysis:")
+            print("\nAnalysis:")
             print(result)
             
+            if "Would you like me to buy this token for you?" in result:
+                decision = input().lower()
+                if decision in ['yes', 'no']:
+                    trading_result = bot.process_trading_decision(decision)
+                    print("\nTrading Result:")
+                    print(trading_result)
+                    bot.state = None  # Reset for new query
+                
         else:
             follow_up = input("\nAsk a follow-up question (or 'new' for new analysis, 'quit' to exit): ")
             if follow_up.lower() == 'quit':
