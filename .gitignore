@@ -131,3 +131,4 @@ dist
 
 myenv
 wallet_data.txt
+*.pyc
