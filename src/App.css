@@ -1,38 +1,181 @@
-.App {
+/* Reset and box-sizing */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #0d0d0d;
+  font-family: 'Roboto', sans-serif;
+  color: #e0e0e0;
+}
+
+/* Main container: full-page layout with a gradient background */
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+}
+
+/* Header styling */
+.app-header {
+  padding: 20px;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.6);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.app-header h1 {
+  margin: 0;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 2.5rem;
+  letter-spacing: 2px;
+}
+
+.app-header p {
+  margin-top: 10px;
+  font-size: 1.2rem;
+  color: #c0c0c0;
+}
+
+/* Main content area */
+.app-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+/* Message / Loading / Result styles */
+.message,
+.result {
+  padding: 30px;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 10px;
+  text-align: center;
+  font-size: 1.2rem;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+}
+
+.result {
+  border: 2px solid #4caf50;
+}
+
+/* Footer styling */
+.app-footer {
+  text-align: center;
+  padding: 15px;
+  background: rgba(0, 0, 0, 0.6);
+  font-size: 0.9rem;
+}
+
+/* ---- Token Input Form ---- */
+.token-input-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-items: center;
+  width: 100%;
+  max-width: 500px;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 30px;
+  border-radius: 10px;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+}
+
+.token-input-form label {
+  font-size: 1.2rem;
+}
+
+.token-input-form input {
+  padding: 15px;
+  width: 100%;
+  font-size: 1rem;
+  border: none;
+  border-radius: 5px;
+}
+
+.token-input-form button {
+  padding: 15px 30px;
+  font-size: 1rem;
+  border: none;
+  border-radius: 5px;
+  background-color: #4caf50;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.token-input-form button:hover {
+  background-color: #43a047;
+}
+
+/* ---- Analysis Summary ---- */
+.analysis-summary {
+  background: rgba(0, 0, 0, 0.8);
+  padding: 30px;
+  border-radius: 10px;
+  width: 100%;
+  max-width: 500px;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
   text-align: center;
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+.analysis-summary h2 {
+  margin-top: 0;
+  font-size: 2rem;
+  letter-spacing: 1px;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
+.summary-list {
+  list-style: none;
+  padding: 0;
+  margin: 20px 0;
+  text-align: left;
 }
 
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
+.summary-list li {
+  margin-bottom: 10px;
+  font-size: 1.1rem;
+}
+
+.buy-prompt {
+  font-size: 1.2rem;
+  margin-bottom: 20px;
+}
+
+/* ---- Buy Decision Buttons ---- */
+.buy-decision {
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  gap: 20px;
   justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
 }
 
-.App-link {
-  color: #61dafb;
+.buy-decision button {
+  padding: 15px 25px;
+  font-size: 1rem;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.buy-decision button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+
+.buy-yes {
+  background-color: #4caf50;
+  color: #fff;
+}
+
+.buy-no {
+  background-color: #f44336;
+  color: #fff;
 }
