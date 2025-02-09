@@ -227,4 +227,5 @@ The system includes comprehensive error handling:
 ![image](https://github.com/user-attachments/assets/99fc2eb6-261d-46f0-bf83-6b0d38122089)
 
 ### video Demo
+[![Watch the video](https://img.youtube.com/vi/Mc1xKRBsTmw/0.jpg)](https://youtu.be/Mc1xKRBsTmw)
 
