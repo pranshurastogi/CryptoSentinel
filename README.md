@@ -1,4 +1,6 @@
 # CryptoSentinel
+![image](https://github.com/user-attachments/assets/aab7f925-b6a1-4424-9bfa-45188b7d5dfe)
+
 
 Below is an example of a comprehensive README for your CryptoSentinel repository:
 
