@@ -7,6 +7,9 @@
 CryptoSentinel is an advanced cryptocurrency research and trading bot that automates project analysis and trading decisions using AI-powered insights. It combines GitHub repository analysis, smart contract security scanning, and token metrics to provide comprehensive investment recommendations.
 ## Technologies Used
 
+### Frontend 
+Switch to branch `frontend`
+
 ### Backend
 - **FastAPI**: High-performance web framework for building APIs with Python
 - **Uvicorn**: Lightning-fast ASGI server implementation
