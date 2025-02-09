@@ -231,6 +231,10 @@ The system includes comprehensive error handling:
 
 ![image](https://github.com/user-attachments/assets/99fc2eb6-261d-46f0-bf83-6b0d38122089)
 
+### Autonome Deployment
+
+![image](https://github.com/user-attachments/assets/303e09f1-5e19-4934-82b5-525062ed7692)
+
 ### video Demo
 [![Watch the video](https://img.youtube.com/vi/Mc1xKRBsTmw/0.jpg)](https://youtu.be/Mc1xKRBsTmw)
 
