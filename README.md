@@ -27,6 +27,7 @@ Switch to branch `frontend`
 - **CDP AgentKit**: Trading execution and blockchain interaction
 - **Web3.py**: Ethereum blockchain interaction
 - **cdp-langchain**: CDP integration with LangChain
+- **covalent api**: to fetch contract data
 
 ### Data Sources & APIs
 - **GitHub API**: Repository and developer analysis
@@ -107,6 +108,7 @@ LANGSMITH_TRACING=true
 LANGSMITH_ENDPOINT=https://api.smith.langchain.com
 LANGSMITH_API_KEY=your_langsmith_key
 LANGSMITH_PROJECT="pr-grumpy-advertising-62"
+COVALENT_API_KEY=your_api_key
 ```
 
 ## Project Structure
