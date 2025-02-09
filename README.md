@@ -1,6 +1,45 @@
 # CryptoSentinel
 
+<div align="center">
+  <img src="https://github.com/user-attachments/assets/aab7f925-b6a1-4424-9bfa-45188b7d5dfe" alt="image">
+</div>
+
 CryptoSentinel is an advanced cryptocurrency research and trading bot that automates project analysis and trading decisions using AI-powered insights. It combines GitHub repository analysis, smart contract security scanning, and token metrics to provide comprehensive investment recommendations.
+## Technologies Used
+
+### Backend
+- **FastAPI**: High-performance web framework for building APIs with Python
+- **Uvicorn**: Lightning-fast ASGI server implementation
+- **Pydantic**: Data validation using Python type annotations
+
+### AI/ML & Chain Management
+- **LangChain**: Framework for developing applications powered by language models
+  - langchain-openai: OpenAI models integration
+  - langchain-core: Core LangChain functionalities
+  - langchain-community: Community-contributed components
+- **LangGraph**: Orchestration of complex AI workflows
+- **OpenAI GPT-4**: Advanced language model for analysis and decision-making
+
+### Blockchain & Trading
+- **CDP AgentKit**: Trading execution and blockchain interaction
+- **Web3.py**: Ethereum blockchain interaction
+- **cdp-langchain**: CDP integration with LangChain
+
+### Data Sources & APIs
+- **GitHub API**: Repository and developer analysis
+- **Tavily API**: AI-powered web search
+- **Twitter API**: Social sentiment analysis
+- **Etherscan API**: Smart contract verification and analysis
+
+### Development & Debugging
+- **python-dotenv**: Environment variable management
+- **LangSmith**: LangChain debugging and monitoring
+- **CORS Middleware**: Cross-Origin Resource Sharing support
+
+### State Management
+- **Custom State Handler**: Session-based bot instance management
+- **Pydantic Models**: Request/Response data validation
+
 
 ## Features
 
@@ -42,7 +81,7 @@ CryptoSentinel is an advanced cryptocurrency research and trading bot that autom
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/cryptosentinel.git
+git https://github.com/pranshurastogi/CryptoSentinel.git
 cd cryptosentinel
 ```
 
@@ -168,14 +207,24 @@ The system includes comprehensive error handling:
 - Trading execution safety checks
 
 ## Agent Flow
+![image](https://github.com/user-attachments/assets/e8550aad-da0e-4f7c-a8fc-1844db5e9976)
+
 
 ## Screenshots:
 
 ### Landing Page
+![image](https://github.com/user-attachments/assets/a75014e1-b2fc-4158-8c51-59dfa78562ae)
 
 ### Analysis Page
+![image](https://github.com/user-attachments/assets/7d7b95c6-d5b6-48a7-863f-d8713cd15e9a)
 
 ### Decision Page
+![image](https://github.com/user-attachments/assets/ece5b654-edd2-4df5-beec-b9d4a0613826)
+
+### Agent Execution Trace
+![image](https://github.com/user-attachments/assets/961dd19a-4443-4ba0-b375-60a24bb97a50)
+
+![image](https://github.com/user-attachments/assets/99fc2eb6-261d-46f0-bf83-6b0d38122089)
 
 ### video Demo
 
